@@ -1,0 +1,22 @@
+# dm: a tag dm-v<upstream>-<n> on dm publishes the webapp tarball the designer pins (designer/config/drawio.json)
+name: dm-release
+on:
+  push:
+    tags: ['dm-v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node dm/check-hosts.mjs
+      - name: tarball
+        run: |
+          T="${GITHUB_REF_NAME}"
+          tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='2000-01-01 00:00Z' -C src/main -czf "drawio-webapp-$T.tar.gz" webapp
+          sha256sum "drawio-webapp-$T.tar.gz" > "drawio-webapp-$T.tar.gz.sha256"
+      - name: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" drawio-webapp-*.tar.gz* --title "$GITHUB_REF_NAME" --notes "draw.io webapp for the designer (branch dm). See dm/README.md."

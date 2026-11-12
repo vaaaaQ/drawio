@@ -1,0 +1,40 @@
+# dm: weekly, when upstream jgraph/drawio has a newer release tag than the last one merged into dm, open a PR
+# sync/v<new> → dm with that tag merged. CI (dm-ci) runs on the PR; a person merges it, never automatically.
+name: dm-sync
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dm
+          fetch-depth: 0
+      - name: newer upstream release?
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh api repos/jgraph/drawio/releases/latest --jq .tag_name)
+          git remote add upstream https://github.com/jgraph/drawio.git
+          git fetch --no-tags upstream "refs/tags/$latest:refs/tags/$latest"
+          if git merge-base --is-ancestor "$latest" HEAD; then echo "dm already has $latest"; exit 0; fi
+          if gh pr list --head "sync/$latest" --state open --json number --jq '.[0].number' | grep -q .; then echo "PR open"; exit 0; fi
+          echo "tag=$latest" >> "$GITHUB_OUTPUT"
+      - name: merge and open the PR
+        if: steps.v.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          t="${{ steps.v.outputs.tag }}"
+          git config user.name "dm-sync"; git config user.email "dm-sync@users.noreply.github.com"
+          git switch -c "sync/$t"
+          git merge --no-edit "$t" || { git status; echo "conflict: resolve by hand"; exit 1; }
+          git push origin "sync/$t"
+          gh pr create --base dm --head "sync/$t" --title "sync: upstream $t into dm" --body "Upstream jgraph/drawio $t merged into dm. dm-ci checks the fork's changes; tag dm-$t-1 after merging to release it for the designer."

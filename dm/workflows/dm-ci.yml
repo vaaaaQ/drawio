@@ -1,0 +1,23 @@
+# dm: checks of the fork's own changes on every PR into dm (a sync PR included) and on pushes to dm
+name: dm-ci
+on:
+  pull_request:
+    branches: [dm]
+  push:
+    branches: [dm]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: bridge parses
+        run: node -e "new Function(require('fs').readFileSync('src/main/webapp/dm/bridge.js','utf8'))"
+      - name: no diagrams.net / draw.io / jgraph service URL
+        run: node dm/check-hosts.mjs
+      - name: the webapp is complete
+        run: test -f src/main/webapp/index.html && test -f src/main/webapp/js/app.min.js && test -d src/main/webapp/stencils
